@@ -1,0 +1,69 @@
+module pipelined_processor(
+    input clk,
+    input reset
+);
+    // Define opcodes
+    localparam ADD = 2'b00;
+    localparam SUB = 2'b01;
+    localparam LOAD = 2'b10;
+
+    // Registers and Memory
+    reg [7:0] reg_file[0:3];        // 4 general purpose registers (R0-R3)
+    reg [7:0] memory[0:15];         // Simple data memory
+    reg [7:0] instr_mem[0:15];      // Simple instruction memory
+
+    // Program Counter
+    reg [3:0] PC;
+
+    // Pipeline Registers
+    reg [7:0] IF_ID_instr;
+    reg [7:0] ID_EX_instr;
+    reg [7:0] ID_EX_rs_data, ID_EX_rt_data;
+    reg [7:0] EX_MEM_result;
+    reg [1:0] EX_MEM_rd;
+    reg [1:0] EX_MEM_opcode;
+
+    // Instruction breakdown
+    wire [1:0] opcode = IF_ID_instr[7:6];
+    wire [1:0] rs = IF_ID_instr[5:4];
+    wire [1:0] rt = IF_ID_instr[3:2];
+    wire [1:0] rd = IF_ID_instr[1:0];
+
+    // FETCH
+    always @(posedge clk or posedge reset) begin
+        if (reset) begin
+            PC <= 0;
+            IF_ID_instr <= 0;
+        end else begin
+            IF_ID_instr <= instr_mem[PC];
+            PC <= PC + 1;
+        end
+    end
+
+    // DECODE
+    always @(posedge clk) begin
+        ID_EX_instr <= IF_ID_instr;
+        ID_EX_rs_data <= reg_file[rs];
+        ID_EX_rt_data <= reg_file[rt];
+    end
+
+    // EXECUTE
+    always @(posedge clk) begin
+        case (ID_EX_instr[7:6])
+            ADD: EX_MEM_result <= ID_EX_rs_data + ID_EX_rt_data;
+            SUB: EX_MEM_result <= ID_EX_rs_data - ID_EX_rt_data;
+            LOAD: EX_MEM_result <= memory[ID_EX_rt_data];  // Load from memory[addr]
+            default: EX_MEM_result <= 0;
+        endcase
+        EX_MEM_rd <= ID_EX_instr[1:0];
+        EX_MEM_opcode <= ID_EX_instr[7:6];
+    end
+
+    // MEMORY/WRITE BACK
+    always @(posedge clk) begin
+        if (EX_MEM_opcode == ADD || EX_MEM_opcode == SUB || EX_MEM_opcode == LOAD) begin
+            reg_file[EX_MEM_rd] <= EX_MEM_result;
+        end
+    end
+
+endmodule
